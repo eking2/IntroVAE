@@ -15,13 +15,13 @@ def conv1x1(in_channels, out_channels):
 def conv3x3(in_channels, out_channels):
 
     # same padding
-    p = (kernel_size - 1) / 2
+    # p = (kernel_size - 1) / 2 = 1
 
     return nn.Conv2d(in_channels,
                      out_channels,
                      kernel_size=3,
                      stride=1,
-                     padding=p)
+                     padding=1)
 
 
 class ResBlock_133(nn.Module):
@@ -63,7 +63,7 @@ class ResBlock_133(nn.Module):
 
 class ResBlock_33(nn.Module):
     def __init__(self, in_channels, out_channels):
-        super(self).__init__()
+        super().__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -107,11 +107,11 @@ class Encoder(nn.Module):
                                stride=1,
                                padding=2)
 
-        self.res1 = ResidualBlock_133(16, 32)
-        self.res2 = ResidualBlock_133(32, 64)
-        self.res3 = ResidualBlock_133(64, 128)
-        self.res4 = ResidualBlock_33(128, 256)
-        self.res5 = ResidualBlock_33(256, 256)
+        self.res1 = ResBlock_133(16, 32)
+        self.res2 = ResBlock_133(32, 64)
+        self.res3 = ResBlock_133(64, 128)
+        self.res4 = ResBlock_33(128, 256)
+        self.res5 = ResBlock_33(256, 256)
 
         # mu, logvar
         self.fc1 = nn.Linear(4096, self.z_size)
@@ -143,7 +143,7 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     def __init__(self, z_size):
-        super(self).__init__()
+        super().__init__()
 
         self.z_size = z_size
 
@@ -151,12 +151,12 @@ class Decoder(nn.Module):
 
         self.fc1 = nn.Linear(self.z_size, 8192)
 
-        self.res2 = ResidualBlock_33(512, 256)
-        self.res3 = ResidualBlock_33(256, 128)
-        self.res4 = ResidualBlock_33(128, 64)
-        self.res5 = ResidualBlock_133(64, 32)
-        self.res6 = ResidualBlock_133(32, 16)
-        self.res7 = ResidualBlock_33(16, 16)
+        self.res2 = ResBlock_33(512, 256)
+        self.res3 = ResBlock_33(256, 128)
+        self.res4 = ResBlock_33(128, 64)
+        self.res5 = ResBlock_133(64, 32)
+        self.res6 = ResBlock_133(32, 16)
+        self.res7 = ResBlock_33(16, 16)
 
         self.conv8 = nn.Conv2d(in_channels = 16,
                                out_channels = 3,
@@ -192,8 +192,7 @@ class Decoder(nn.Module):
 
 class IntroVAE(nn.Module):
     def __init__(self, z_size=256):
-
-        super(self).__init__()
+        super().__init__()
 
         self.z_size = z_size
 

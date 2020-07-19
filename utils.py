@@ -7,32 +7,30 @@ class dotdict(dict):
 
     '''dot.notation access to dict attributes'''
 
-    __getattr__ = dict.get
+    __getattr__ = dict.__getitem__
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
-class Params:
+
+def parse_params(yaml_path):
 
     '''Read hyperparameters from config yaml'''
 
-    @staticmethod
-    def parse(yaml_path):
+    content = Path(yaml_path).read_text()
+    params = yaml.safe_load(content)
 
-        content = Path(yaml_path).read_text()
-        params = yaml.safe_load(content)
-
-        return dotdict(params)
+    return dotdict(params)
 
 
 def init_logger(log_file):
-    
+
     '''setup logger to print to screen and save to file'''
 
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
     handlers = [logging.StreamHandler(),
-                logging.FileHandler(log_file, 'a')]
+                logging.FileHandler(f'logs/{log_file}', 'a')]
 
     fmt = logging.Formatter('%(asctime)-15s: %(levelname)s %(message)s')
 
@@ -55,14 +53,14 @@ def save_checkpoint(model, optimizer, epoch, file_name, delete=True):
     torch.save({'epoch' : epoch,
         'model_state_dict' : model.state_dict(),
         'optimizer_state_dict' : optimizer.state_dict()},
-        f'checkpoint/{file_name}_{epoch}.pt')
+        f'checkpoints/{file_name}_{epoch}.pt')
 
 
 def load_checkpoint(checkpoint, model, optimizer=None):
 
     '''load model state dict to continue training or evaluate'''
 
-    check = Path(f'checkpoint/{checkpoint}.pt')
+    check = Path(f'checkpoints/{checkpoint}.pt')
     if not check.exists():
         raise(f'File does not exist {check}')
 

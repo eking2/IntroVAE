@@ -3,3 +3,8 @@
 
 # ignore image data
 data/celebA-HQ-128x128
+
+# ignore checkpoints
+checkpoint/
+logs/
+__pycache__
