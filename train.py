@@ -1,22 +1,47 @@
 import torch
+from torchvision import transforms
 from torchvision.utils import make_grid
 
 import utils
 import IntroVAE128
 import datasets
+import argparse
 
-def load_data():
+def parse_args():
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-c', '--config', type=str, required=True,
+                        help='config path')
+
+    return parser.parse_args()
+
+
+def load_config(config_path):
 
     '''read in param data'''
-    pass
 
-def train(model, optimizer, train_loader, margin, alpha, beta):
+    params = utils.parse_params(config_path)
+
+    return params
+
+
+def load_data(batch_size, transforms=None):
+
+    '''setup dataloader'''
+
+    dataset = datasets.CelebA(transforms=transforms)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    return dataloader
+
+def train(model, optimizer, dataloader, margin, alpha, beta, ):
 
     '''run train'''
 
     model.train()
 
-    for batch, images in enumerate(train_loader):
+    for batch, images in enumerate(dataloader):
 
         # numbers correspond to pseudocode on page 6
 
@@ -96,13 +121,27 @@ def save_output():
 
 def main():
 
+    # parse args
+    args = parse_args()
+
     # load params
+    params = load_params(args.config)
 
     # init logger
+    utils.init_logger(params.experiment_name)
 
     # load data
+    transforms = transforms.ToTensor()
+    dataloader = load_data(transforms=transforms, batch_size=params.batch_size)
+
+    # init model and optimizer
 
     # train
+    for epoch in range(1, params.num_epochs + 1):
+
+        train(model, optimizer, dataloader, params.margin, params.alpha, params.beta)
+
+        # save model every checkpoint interval
 
     # output images
 
