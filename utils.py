@@ -30,9 +30,11 @@ def init_logger(log_file):
     logger.setLevel(logging.INFO)
 
     handlers = [logging.StreamHandler(),
-                logging.FileHandler(f'logs/{log_file}', 'a')]
+                logging.FileHandler(f'logs/{log_file}.log', 'a')]
 
-    fmt = logging.Formatter('%(asctime)-15s: %(levelname)s %(message)s')
+    # do not print millisec
+    fmt = logging.Formatter('%(asctime)s: %(levelname)s: %(message)s',
+                            "%Y-%m-%d %H:%M:%S")
 
     for h in handlers:
         h.setFormatter(fmt)
