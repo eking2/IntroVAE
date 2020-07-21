@@ -12,9 +12,9 @@ class CelebA(Dataset):
         # download from
         # https://www.dropbox.com/s/ayz2roywuq253l0/celebA-HQ-128x128.tar.gz?dl=0
         if train:
-            self.images = list(Path('../celebA-HQ-128x128/train').rglob('*.npy'))
+            self.images = list(Path('data/celebA-HQ-128x128/train').rglob('*.npy'))
         else:
-            self.images = list(Path('../celebA-HQ-128x128/test').rglob('*.npy'))
+            self.images = list(Path('data/celebA-HQ-128x128/test').rglob('*.npy'))
 
         self.transforms = transforms
 

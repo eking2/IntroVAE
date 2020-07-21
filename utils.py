@@ -49,8 +49,13 @@ def save_checkpoint(model, optimizer, epoch, file_name, delete=True):
 
     # remove last checkpoint file
     if delete:
-        old_check = list(Path('checkpoint').glob('*.pt'))[0]
-        old_check.unlink()
+
+        # first checkpoint will not have file
+        try:
+            old_check = list(Path('checkpoint').glob('*.pt'))[0]
+            old_check.unlink()
+        except:
+            pass
 
     torch.save({'epoch' : epoch,
         'model_state_dict' : model.state_dict(),
