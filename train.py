@@ -1,5 +1,6 @@
 import torch
 import torch.optim as optim
+import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import torchvision.utils as vutils
@@ -75,9 +76,11 @@ def train(model, optimizer, dataloader, margin, alpha, beta, log_interval, epoch
         z_mu_pp, z_log_var_pp = model.encoder(x_p.detach())
 
         # 9, discriminate, get loss on fake images
-        enc_reg_loss = model.reg_loss(z_mu, z_log_var) \
-            + alpha * (F.relu(margin - model.reg_loss(z_mu_r, z_log_var_r))
-                    +  F.relu(margin - model.reg_loss(z_mu_pp, z_log_var_pp)))
+        e_real = model.reg_loss(z_mu, z_log_var)
+        e_rec = model.reg_loss(z_mu_r, z_log_var_r)
+        e_sample = model.reg_loss(z_mu_pp, z_log_var_pp)
+
+        enc_reg_loss = e_real + alpha * (F.relu(margin - e_rec) +  F.relu(margin - e_sample))
 
         # 10, update encoder
         enc_loss = beta*ae_loss + enc_reg_loss
@@ -102,7 +105,10 @@ def train(model, optimizer, dataloader, margin, alpha, beta, log_interval, epoch
         z_mu_pp, z_log_var_pp = model.encoder(x_p)
 
         # 12, decoder loss
-        gen_reg_loss = alpha * (model.reg_loss(z_mu_r, z_log_var_r) + model.reg_loss(z_mu_pp, z_log_var_pp))
+        g_rec = model.reg_loss(z_mu_r, z_log_var_r)
+        g_sample = model.reg_loss(z_mu_pp, z_log_var_pp)
+
+        gen_reg_loss = alpha * (g_rec + g_sample)
 
         # 13, update decoder
         gen_loss = beta*ae_loss + gen_reg_loss
@@ -116,38 +122,56 @@ def train(model, optimizer, dataloader, margin, alpha, beta, log_interval, epoch
         if batch % log_interval == 0:
             logging.info(f'Epoch: {epoch}, Batch: {batch}, Encoder Loss: {enc_loss.item():.3f}, Generator Loss: {gen_loss.item():.3f}')
 
+    # epoch loss decomposition
+    logging.info(f'ae_loss: {beta*ae_loss.item():.3f}, e_real: {e_real.item():.3f}, e_rec: {e_rec.item():.3f}, e_sample: {e_sample.item():.3f}, g_rec: {g_rec.item():.3f}, g_sample: {g_sample.item():.3f}')
 
-def save_output(model, images, z_dim, epoch, device, num_images=8):
+
+def save_output(model, images, z_dim, epoch, device, z_p, num_images):
 
     '''save reconstructed and generated images'''
+
+    # make output dir if missing
+    if not Path('output').exists():
+        Path('output').mkdir()
 
     model.eval()
     with torch.no_grad():
 
         # images sampled from p(z)
         # should use a fixed sample vector or random each time?
-        z_p = torch.randn(num_images, z_dim).to(device)
+        #z_p = torch.randn(num_images, z_dim).to(device)
         x_p = model.decoder(z_p)
-        img_grid = vutils.make_grid(x_p, nrow=4).to('cpu')
+        img_grid = vutils.make_grid(x_p, nrow=8).to('cpu')
         plt.imshow(img_grid.permute(1, 2, 0))
         plt.axis('off')
-        plt.savefig(f'output/sampled_epoch_{epoch}.png')
+        plt.title(f'Epoch {epoch}\nSampled')
+        plt.savefig(f'output/sampled_epoch_{epoch}.png', bbox_inches='tight', dpi=300)
         plt.close()
 
         # reconstructed images
         x_r = model(images)
         recon_samples = torch.cat([images[:num_images,...], x_r[:num_images,...]], dim=0)
-        img_grid = vutils.make_grid(recon_samples, nrow=4).to('cpu')
+        img_grid = vutils.make_grid(recon_samples, nrow=8).to('cpu')
         plt.imshow(img_grid.permute(1, 2, 0))
         plt.axis('off')
-        plt.savefig(f'output/recon_epoch_{epoch}.png')
+        plt.title(f'Epoch {epoch}\nReconstructed')
+        plt.savefig(f'output/recon_epoch_{epoch}.png', bbox_inches='tight', dpi=300)
         plt.close()
+
+
+# to access attributes of the wrapped module
+# https://discuss.pytorch.org/t/access-att-of-model-wrapped-within-torch-nn-dataparallel-maximum-recursion-depth-exceeded/46975
+#class CustomDataParallel(nn.DataParallel):
+#    def __getattr__(self, name):
+
+#        try:
+#            return super().__getattr__(name)
+#        except AttributeError:
+#            return getattr(self.module, name)
 
 
 def main():
 
-    # set device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # parse args
     args = parse_args()
@@ -159,7 +183,6 @@ def main():
     # init logger
     utils.init_logger(params.experiment_name)
     logging.info(params)
-    logging.info(f'Device: {device}')
 
     # load data
     trans = transforms.ToTensor()
@@ -169,15 +192,20 @@ def main():
     # setup for multigpu
     model = IntroVAE128.IntroVAE(z_size=params.z_dim)
 
-    if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(IntroVAE128.IntroVAE(z_size=params.z_dim))
+    #if torch.cuda.device_count() > 1:
+    #    logging.info('Running DataParallel')
+    #    model = CustomDataParallel(model)
 
-    logging.info(f'Number of GPUs: {torch.cuda.device_count()}')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    #logging.info(f'Number of GPUs: {torch.cuda.device_count()}')
+    logging.info(f'Device: {device}')
     model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=params.learning_rate)
 
     # train
     train_start = time.time()
+    z_p = torch.randn(params.num_images*2, params.z_dim).to(device)
+
     for epoch in range(1, params.num_epochs + 1):
 
         epoch_start = time.time()
@@ -193,13 +221,13 @@ def main():
             # draw images to reconstruct from dataloader
             images = next(iter(dataloader))
             images = images.to(device)
-            save_output(model, images, params.z_dim, epoch, device)
+            save_output(model, images, params.z_dim, epoch, device, z_p, params.num_images)
 
         epoch_time = (time.time() - epoch_start) / 60
         logging.info(f'Epoch {epoch} time: {epoch_time:.2f}m')
 
     total_train = (time.time() - train_start) / 60
-    logging.info('Trained over {total_train:.2f}m')
+    logging.info(f'Trained over {total_train:.2f}m')
 
 
 if __name__ == '__main__':

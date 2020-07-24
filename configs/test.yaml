@@ -1,12 +1,13 @@
 experiment_name: introvae_128
 
-num_epochs: 300
+num_epochs: 500
 margin: 110
 alpha: 0.25
 beta: 0.5
 learning_rate: 0.0002
-batch_size: 192
+batch_size: 256
 log_interval: 100
 z_dim: 256
 checkpoint_interval: 5
+num_images: 16
 

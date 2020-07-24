@@ -5,6 +5,7 @@
 data/celebA-HQ-128x128
 
 # ignore checkpoints
-checkpoint/
+checkpoints/
 logs/
+output/
 __pycache__
