@@ -9,3 +9,4 @@ checkpoints/
 logs/
 output/
 __pycache__
+*.gif
