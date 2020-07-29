@@ -67,12 +67,12 @@ def load_checkpoint(checkpoint, model, optimizer=None):
 
     '''load model state dict to continue training or evaluate'''
 
-    check = Path(f'checkpoints/{checkpoint}.pt')
+    check = Path(checkpoint)
     if not check.exists():
-        raise(f'File does not exist {check}')
+        raise Exception(f'File does not exist {checkpoint}')
 
-    check = torch.load(check)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    check = torch.load(check, map_location='cpu')
+    model.load_state_dict(check['model_state_dict'])
 
     if optimizer:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
