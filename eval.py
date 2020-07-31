@@ -13,6 +13,10 @@ import torch
 import matplotlib.pyplot as plt
 import utils
 import torchvision.utils as vutils
+from pytorch_msssim import ms_ssim
+import torch.nn.functional as F
+import yaml
+
 #import pygifsicle
 
 
@@ -38,11 +42,11 @@ def parse_args():
     parser.add_argument('-w', '--windows', type=int, default=8,
             help='number of intermediate windows/steps to sample (default: 8)')
 
-    # mssim score
-    parser.add_argument('-m', '--mssim', type=str,
-                        help='path to checkpoint to calculate mssim score')
-    parser.add_argument('-n', '--num_mssim', type=int, default=1000,
-            help='number of images to generate for msssim scoring (default: 1000)')
+    # ms-ssim score to measure diversity
+    parser.add_argument('-m', '--ms_ssim', type=str,
+                        help='checkpoint to calculate mssim score')
+    parser.add_argument('-n', '--num_ms_ssim', type=int, default=1000,
+            help='number of images to generate for ms-ssim scoring (default: 1000)')
 
     return parser.parse_args()
 
@@ -214,6 +218,76 @@ def plot_interp(n_samples, model, checkpoint, steps):
     plt.savefig(f'assets/{name}_interp.png', bbox_inches='tight', dpi=300)
 
 
+def calc_msssim(n_images, model, checkpoint):
+
+    '''calculate image diversity with ms-ssim (multi-scale structural similarity) metric and reconstruction quality with rmse.
+       reconstuctions (x_r), samples (x_p).
+
+    Args:
+        n_images (int) : number of images to generate to compare against real
+        model (model) : vae model to encode and decode image tensors
+        checkpoint (str) : stem for checkpoint file to load
+
+    Returns:
+        avg_msssim (float) : average ms-ssim score for generated images (smaller is more diverse)
+        avg_rmse (float) : average root mean square error for recon to real (smaller is more accurate)
+    '''
+
+    # dataloader
+    # normalizes to [0-1]
+    trans = transforms.ToTensor()
+    dataset = datasets.CelebA(transforms = trans)
+    dataloader = DataLoader(dataset, batch_size = 32, shuffle=True)
+
+    # load model
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    utils.load_checkpoint(f'checkpoints/{checkpoint}.pt', model)
+    model = model.to(device)
+
+    # loop over loader and calc ms-ssim and rmse for each batch until hits n_images
+    image_count = 0
+    m_scores = []
+    rmse_scores = []
+
+    while image_count < n_images:
+        for images in dataloader:
+
+            images = images.to(device)
+
+            # real image recon
+            z_mu, z_log_var = model.encoder(images)
+            z = model.reparameterize(z_mu, z_log_var)
+            x_r = model.decoder(z)
+
+            # calc rmse
+            # sum of all pixel loss per image
+            rmse = torch.sqrt(F.mse_loss(x_r, images, reduction='sum')) / len(images)
+            rmse_scores.append(rmse.item())
+
+            # sampled
+            z_p = torch.randn_like(z)
+            x_p = model.decoder(z_p)
+
+            # calc ms-ssim from recon to sampled
+            # good model will have low similarity between recon and sampled, indicates not memorizing
+            m = ms_ssim(x_r, x_p, data_range=1.0, size_average=True, win_size=7)
+            m_scores.append(m.item())
+
+            # up counter
+            image_count += len(images)
+
+    # averaged results
+    avg_msssim = sum(m_scores) / len(m_scores)
+    avg_rmse = sum(rmse_scores) / len(rmse_scores)
+
+    # write
+    output = {'checkpoint' : checkpoint,
+              'ms_ssim' : avg_msssim,
+              'avg_rmse' : avg_rmse}
+
+    Path(f'assets/{checkpoint}.yaml').write_text(yaml.dump(output))
+
+
 def main():
 
     args = parse_args()
@@ -235,7 +309,11 @@ def main():
         model = IntroVAE()
         plot_interp(args.count, model, args.interpolate, args.windows)
 
-    # mssim
+    # ms-ssim
+    if args.ms_ssim:
+        model = IntroVAE()
+        calc_msssim(args.num_ms_ssim, model, args.ms_ssim)
+
 
 if __name__ == '__main__':
 
